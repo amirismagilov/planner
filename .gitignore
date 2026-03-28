@@ -1,0 +1,2 @@
+# Accidental capture of npm stderr (mistyped command, e.g. `npm notice`)
+11.12.1
