@@ -397,7 +397,7 @@ function App() {
     left: number
     width: number
     height: number
-    paths: { d: string; key: string; endX: number; endY: number }[]
+    paths: { d: string; key: string; endX: number; endY: number; arrowTipEast: boolean }[]
   } | null>(null)
 
   const tryBeginGanttDrag = (
@@ -538,7 +538,14 @@ function App() {
       const colLeft = ar.left - wrapRect.left + wrap.scrollLeft
       const colW = ar.width
       const h = wrap.scrollHeight
-      setGanttLinksOverlay({ left: colLeft, width: colW, height: h, paths: [] })
+      /* Не сбрасывать paths: [] — measureBox дергается при scroll/ResizeObserver; иначе стрелки
+       * пропадают до следующего rAF во фазе 2. Координаты обновит фаза 2 по тем же deps. */
+      setGanttLinksOverlay((prev) => ({
+        left: colLeft,
+        width: colW,
+        height: h,
+        paths: prev?.paths ?? [],
+      }))
     }
 
     const schedule = () => requestAnimationFrame(() => measureBox())
@@ -556,7 +563,9 @@ function App() {
 
   /** Фаза 2: точки выхода/входа в координатах слоя SVG (getBoundingClientRect относительно svg) */
   useLayoutEffect(() => {
-    if (!diagramMode || blockEdges.length === 0 || !ganttLinksOverlay) return
+    if (!diagramMode || blockEdges.length === 0 || !ganttLinksOverlay) {
+      return
+    }
     const wrap = ganttWrapRef.current
     if (!wrap) return
 
@@ -568,7 +577,7 @@ function App() {
         return
       }
       const sbr = svg.getBoundingClientRect()
-      const paths: { d: string; key: string; endX: number; endY: number }[] = []
+      const paths: { d: string; key: string; endX: number; endY: number; arrowTipEast: boolean }[] = []
       const elbow = 12
 
       for (const edge of blockEdges) {
@@ -587,13 +596,24 @@ function App() {
         const yIn = rd.top + rd.height / 2 - sbr.top
 
         let d: string
+        /** Последний горизонтальный шаг к (xIn,yIn): слева направо → наконечник «вправо» в полосу; справа налево — «влево», иначе стрелка смотрит против хода линии. */
+        let arrowTipEast: boolean
         if (xIn >= xOut + elbow) {
           const midX = (xOut + xIn) / 2
           d = `M ${xOut} ${yOut} L ${midX} ${yOut} L ${midX} ${yIn} L ${xIn} ${yIn}`
+          arrowTipEast = midX < xIn
         } else {
-          d = `M ${xOut} ${yOut} L ${xOut + elbow} ${yOut} L ${xOut + elbow} ${yIn} L ${xIn} ${yIn}`
+          const xEl = xOut + elbow
+          d = `M ${xOut} ${yOut} L ${xEl} ${yOut} L ${xEl} ${yIn} L ${xIn} ${yIn}`
+          arrowTipEast = xEl < xIn
         }
-        paths.push({ d, key: `${edge.blockerId}-${edge.blockedId}`, endX: xIn, endY: yIn })
+        paths.push({
+          d,
+          key: `${edge.blockerId}-${edge.blockedId}`,
+          endX: xIn,
+          endY: yIn,
+          arrowTipEast,
+        })
       }
 
       setGanttLinksOverlay((prev) => (prev ? { ...prev, paths } : null))
@@ -1012,11 +1032,15 @@ function App() {
             }}
             aria-hidden
           >
-            {ganttLinksOverlay.paths.map(({ d, key, endX, endY }) => (
+            {ganttLinksOverlay.paths.map(({ d, key, endX, endY, arrowTipEast }) => (
               <Fragment key={key}>
                 <path d={d} fill="none" stroke="#64748b" strokeWidth={1.5} />
                 <polygon
-                  points={`${endX},${endY} ${endX - 7},${endY - 3.5} ${endX - 7},${endY + 3.5}`}
+                  points={
+                    arrowTipEast
+                      ? `${endX},${endY} ${endX - 7},${endY - 3.5} ${endX - 7},${endY + 3.5}`
+                      : `${endX},${endY} ${endX + 7},${endY - 3.5} ${endX + 7},${endY + 3.5}`
+                  }
                   fill="#64748b"
                 />
               </Fragment>

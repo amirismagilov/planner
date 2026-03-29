@@ -1,0 +1,29 @@
+# Подключать поверх основного файла: горячая перезагрузка при правках кода.
+# Запуск: docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+# UI: http://localhost:5174 (см. docker-compose.yml → web.ports)
+#
+# API: uvicorn --reload — перезапуск при изменении Python; весь ./backend смонтирован в /app.
+# Web: весь ./frontend смонтирован в /app; node_modules из образа (анонимный volume).
+
+services:
+  api:
+    command:
+      [
+        'uvicorn',
+        'app.main:app',
+        '--host',
+        '0.0.0.0',
+        '--port',
+        '8000',
+        '--reload',
+      ]
+    volumes:
+      - ./backend:/app
+
+  web:
+    environment:
+      CHOKIDAR_USEPOLLING: 'true'
+    volumes:
+      - ./frontend:/app
+      # зависимости из образа, не с хоста (иначе bind-mount затирает node_modules)
+      - /app/node_modules

@@ -49,9 +49,21 @@ npm install
 npm run dev
 ```
 
+При сохранении файлов **backend** перезапускается сам (`--reload`), **frontend** пересобирается в памяти и страница в браузере обновляется через Vite (HMR).
+
+### Docker с автоперезапуском
+
+Тот же режим в контейнерах (правки на диске сразу подхватываются):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
+
+После смены `package.json` / зависимостей фронта пересоберите образ `web` (`--build`).
+
 - Backend API: [http://localhost:8000](http://localhost:8000)
 - Swagger: [http://localhost:8000/docs](http://localhost:8000/docs)
-- Frontend UI: [http://localhost:5173](http://localhost:5173)
+- Frontend UI (Docker и `npm run dev`): [http://localhost:5174](http://localhost:5174)
 
 ## Минимальная обработка ошибок
 
