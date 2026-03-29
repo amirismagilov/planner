@@ -50,6 +50,7 @@ type ApiTask = {
   pbi_id?: number | null
   pbi_number?: number | null
   pbi_name?: string | null
+  list_order?: number
   blocked_by: RelatedTaskBrief[]
   blocks: RelatedTaskBrief[]
   other_links: RelatedTaskBrief[]
@@ -396,11 +397,22 @@ function App() {
   const effectivePbiId = (task: ApiTask): number | null =>
     task.pbi_id != null && validPbiIds.has(task.pbi_id) ? task.pbi_id : null
 
-  const moveTaskToPbiGroup = async (taskId: number, newPbiId: number | null) => {
-    const task = tasks.find((t) => t.id === taskId)
-    if (!task) return
-    if (effectivePbiId(task) === newPbiId) return
-    await assignPbi(taskId, newPbiId)
+  const reorderTask = async (
+    taskId: number,
+    targetPbiId: number | null,
+    beforeTaskId: number | null
+  ) => {
+    try {
+      await axios.post(`${API}/api/tasks/reorder`, {
+        task_id: taskId,
+        target_pbi_id: targetPbiId,
+        before_task_id: beforeTaskId,
+      })
+      setMessage('Порядок обновлён')
+      await loadData(true)
+    } catch (e: any) {
+      setMessage(e?.response?.data?.detail || 'Не удалось изменить порядок')
+    }
   }
 
   const handleTaskDragStart = (e: ReactDragEvent, taskId: number) => {
@@ -426,21 +438,21 @@ function App() {
     e.preventDefault()
     const tid = taskIdFromDragEvent(e)
     if (tid == null) return
-    await moveTaskToPbiGroup(tid, pbiId)
+    await reorderTask(tid, pbiId, null)
   }
 
   const handleDropUngrouped = async (e: ReactDragEvent) => {
     e.preventDefault()
     const tid = taskIdFromDragEvent(e)
     if (tid == null) return
-    await moveTaskToPbiGroup(tid, null)
+    await reorderTask(tid, null, null)
   }
 
   const handleDropOnTaskRow = async (e: ReactDragEvent, target: ApiTask) => {
     e.preventDefault()
     const tid = taskIdFromDragEvent(e)
     if (tid == null || tid === target.id) return
-    await moveTaskToPbiGroup(tid, effectivePbiId(target))
+    await reorderTask(tid, effectivePbiId(target), target.id)
   }
 
   const timeline = useMemo(

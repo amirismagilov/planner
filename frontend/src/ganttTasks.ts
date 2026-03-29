@@ -13,6 +13,8 @@ export type GanttTaskInput = {
   duration_days?: number | null
   hidden_by_user: boolean
   pbi_id?: number | null
+  /** Порядок внутри группы PBI / «без группы» */
+  list_order?: number
 }
 
 /**
@@ -72,12 +74,18 @@ export function groupTasksForGantt<T extends GanttTaskInput>(tasks: T[], pbis: A
       tasksByPbiId.set(t.pbi_id, list)
     }
   }
+  const sortInGroup = (a: T, b: T) => {
+    const oa = a.list_order ?? 0
+    const ob = b.list_order ?? 0
+    if (oa !== ob) return oa - ob
+    return a.jira_key.localeCompare(b.jira_key)
+  }
   for (const list of tasksByPbiId.values()) {
-    list.sort((a, b) => a.jira_key.localeCompare(b.jira_key))
+    list.sort(sortInGroup)
   }
   const ungrouped = tasks
     .filter((t) => t.pbi_id == null || !validPbiIds.has(t.pbi_id as number))
-    .sort((a, b) => a.jira_key.localeCompare(b.jira_key))
+    .sort(sortInGroup)
   return { pbisSorted, tasksByPbiId, ungrouped }
 }
 

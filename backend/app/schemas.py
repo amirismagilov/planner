@@ -19,6 +19,15 @@ class RelatedTaskBrief(BaseModel):
     link_type: str
 
 
+class TaskReorderRequest(BaseModel):
+    """Перемещение задачи в группу PBI и/или на новую позицию в списке."""
+
+    task_id: int
+    target_pbi_id: Optional[int] = None
+    # Вставить перед этой задачей; None — в конец группы
+    before_task_id: Optional[int] = None
+
+
 class TaskUpdateRequest(BaseModel):
     user_start_day: Optional[str] = None
     user_end_day: Optional[str] = None
@@ -68,6 +77,7 @@ class TaskResponse(BaseModel):
     pbi_id: Optional[int] = None
     pbi_number: Optional[int] = None
     pbi_name: Optional[str] = None
+    list_order: int = 0
     blocked_by: List[RelatedTaskBrief]
     blocks: List[RelatedTaskBrief]
     other_links: List[RelatedTaskBrief]

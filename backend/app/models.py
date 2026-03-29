@@ -52,6 +52,9 @@ class Task(Base):
     pbi_id = Column(Integer, ForeignKey("pbis.id", ondelete="SET NULL"), nullable=True, index=True)
     pbi = relationship("Pbi", back_populates="tasks")
 
+    # Порядок строк внутри группы (один PBI или «без группы»); сортировка в UI.
+    list_order = Column(Integer, nullable=False, default=0)
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
