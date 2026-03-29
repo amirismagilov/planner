@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type DragEvent as ReactDragEvent,
   type PointerEvent as ReactPointerEvent,
   type SVGProps,
 } from 'react'
@@ -57,10 +58,18 @@ type ApiTask = {
 const API = 'http://localhost:8000'
 
 const GANTT_DAY_PX = 26
-/** Колонок в режиме «все параметры» (без Ганта) */
-const COLS_FULL = 14
-/** Колонок в режиме «планирование» без Ганта: 4 sticky + действия (PBI/даты скрыты) */
-const COLS_DIAGRAM = 5
+/** Колонок в режиме «все параметры» (без Ганта), включая ручку DnD */
+const COLS_FULL = 15
+/** Колонок в режиме «планирование» без колонки Ганта: ручка + 4 sticky + действия */
+const COLS_DIAGRAM = 6
+
+const TASK_DRAG_MIME = 'application/x-planner-task-id'
+
+function taskIdFromDragEvent(e: ReactDragEvent): number | null {
+  const raw = e.dataTransfer.getData(TASK_DRAG_MIME) || e.dataTransfer.getData('text/plain')
+  const n = parseInt(String(raw).trim(), 10)
+  return Number.isFinite(n) ? n : null
+}
 
 function IconTrash(props: SVGProps<SVGSVGElement>) {
   return (
@@ -141,6 +150,9 @@ function App() {
   const [editingPbiId, setEditingPbiId] = useState<number | null>(null)
   const [pbiDraftNumber, setPbiDraftNumber] = useState('')
   const [pbiDraftName, setPbiDraftName] = useState('')
+  /** DnD: перенос задачи между группами PBI */
+  const [draggingTaskId, setDraggingTaskId] = useState<number | null>(null)
+  const [dropHoverKey, setDropHoverKey] = useState<string | null>(null)
 
   const loadData = async (silent = false) => {
     try {
@@ -378,6 +390,58 @@ function App() {
     () => groupTasksForGantt<ApiTask>(tasks, pbis),
     [tasks, pbis]
   )
+
+  const validPbiIds = useMemo(() => new Set(pbis.map((p) => p.id)), [pbis])
+
+  const effectivePbiId = (task: ApiTask): number | null =>
+    task.pbi_id != null && validPbiIds.has(task.pbi_id) ? task.pbi_id : null
+
+  const moveTaskToPbiGroup = async (taskId: number, newPbiId: number | null) => {
+    const task = tasks.find((t) => t.id === taskId)
+    if (!task) return
+    if (effectivePbiId(task) === newPbiId) return
+    await assignPbi(taskId, newPbiId)
+  }
+
+  const handleTaskDragStart = (e: ReactDragEvent, taskId: number) => {
+    e.dataTransfer.setData(TASK_DRAG_MIME, String(taskId))
+    e.dataTransfer.setData('text/plain', String(taskId))
+    e.dataTransfer.effectAllowed = 'move'
+    setDraggingTaskId(taskId)
+    setDropHoverKey(null)
+  }
+
+  const handleTaskDragEnd = () => {
+    setDraggingTaskId(null)
+    setDropHoverKey(null)
+  }
+
+  const handleRowDragOver = (e: ReactDragEvent, key: string) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDropHoverKey(key)
+  }
+
+  const handleDropOnPbi = async (e: ReactDragEvent, pbiId: number) => {
+    e.preventDefault()
+    const tid = taskIdFromDragEvent(e)
+    if (tid == null) return
+    await moveTaskToPbiGroup(tid, pbiId)
+  }
+
+  const handleDropUngrouped = async (e: ReactDragEvent) => {
+    e.preventDefault()
+    const tid = taskIdFromDragEvent(e)
+    if (tid == null) return
+    await moveTaskToPbiGroup(tid, null)
+  }
+
+  const handleDropOnTaskRow = async (e: ReactDragEvent, target: ApiTask) => {
+    e.preventDefault()
+    const tid = taskIdFromDragEvent(e)
+    if (tid == null || tid === target.id) return
+    await moveTaskToPbiGroup(tid, effectivePbiId(target))
+  }
 
   const timeline = useMemo(
     () => buildTimelineModel(tasks, editingStart, editingEnd, editingDuration),
@@ -740,7 +804,29 @@ function App() {
   )
 
   const taskRow = (task: ApiTask) => (
-    <tr key={task.id} className={task.hidden_by_user ? 'row-hidden' : ''}>
+    <tr
+      key={task.id}
+      className={[
+        task.hidden_by_user ? 'row-hidden' : '',
+        draggingTaskId === task.id ? 'task-row-dragging' : '',
+        dropHoverKey === `task:${task.id}` ? 'task-row-drop-hover' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      onDragOver={(e) => handleRowDragOver(e, `task:${task.id}`)}
+      onDrop={(e) => handleDropOnTaskRow(e, task)}
+    >
+      <td
+        className="drag-handle-cell"
+        draggable
+        title="Перетащите строку на заголовок PBI, на «Без группы» или на другую задачу"
+        onDragStart={(e) => handleTaskDragStart(e, task.id)}
+        onDragEnd={handleTaskDragEnd}
+      >
+        <span className="drag-grip" aria-hidden>
+          ⠿
+        </span>
+      </td>
       <td className="col-sticky col-sticky-key">{task.jira_key}</td>
       <td className="col-sticky col-sticky-title">
         <div className="title-cell">
@@ -894,6 +980,9 @@ function App() {
         <table className={diagramMode ? 'gantt-main-table' : undefined}>
           <thead>
             <tr>
+              <th className="drag-col-head" title="Перетаскивание">
+                {' '}
+              </th>
               <th className="col-sticky col-sticky-key">Key</th>
               <th className="col-sticky col-sticky-title">Название</th>
               <th className="col-sticky col-sticky-type">Тип</th>
@@ -945,7 +1034,16 @@ function App() {
               <>
                 {pbisSorted.map((pbi) => (
                   <Fragment key={pbi.id}>
-                    <tr className="pbi-header-row">
+                    <tr
+                      className={[
+                        'pbi-header-row',
+                        dropHoverKey === `pbi:${pbi.id}` ? 'pbi-drop-hover' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      onDragOver={(e) => handleRowDragOver(e, `pbi:${pbi.id}`)}
+                      onDrop={(e) => handleDropOnPbi(e, pbi.id)}
+                    >
                       <td colSpan={diagramMode ? COLS_DIAGRAM : COLS_FULL} className="pbi-header-label-cell">
                         <div className="pbi-header-inner">
                           {editingPbiId === pbi.id ? (
@@ -1004,9 +1102,19 @@ function App() {
                     {(tasksByPbiId.get(pbi.id) ?? []).map((t) => taskRow(t))}
                   </Fragment>
                 ))}
-                {tasks.length > 0 && ungrouped.length > 0 && (
+                {tasks.length > 0 && (
                   <Fragment key="ungrouped">
-                    <tr className="pbi-header-row pbi-header-ungrouped">
+                    <tr
+                      className={[
+                        'pbi-header-row',
+                        'pbi-header-ungrouped',
+                        dropHoverKey === 'ungrouped' ? 'pbi-drop-hover' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      onDragOver={(e) => handleRowDragOver(e, 'ungrouped')}
+                      onDrop={handleDropUngrouped}
+                    >
                       <td colSpan={diagramMode ? COLS_DIAGRAM : COLS_FULL} className="pbi-header-label-cell">
                         Без группы PBI
                       </td>

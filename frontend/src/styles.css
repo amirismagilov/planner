@@ -305,8 +305,9 @@ th {
   background: #f9fafb;
 }
 
-/* Фиксированные слева: Key, Название, Тип, Статус (ширины задают накопление left) */
+/* Фиксированные слева: ручка DnD, Key, Название, Тип, Статус (ширины задают накопление left) */
 :root {
+  --sticky-drag: 32px;
   --sticky-key: 88px;
   --sticky-title: 200px;
   --sticky-type: 104px;
@@ -319,9 +320,65 @@ td.col-sticky {
   background-clip: padding-box;
 }
 
+th.drag-col-head,
+td.drag-handle-cell {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  width: var(--sticky-drag);
+  min-width: var(--sticky-drag);
+  max-width: var(--sticky-drag);
+  padding: 4px 2px !important;
+  text-align: center;
+  vertical-align: middle;
+  background-clip: padding-box;
+  box-shadow: 1px 0 0 #e5e7eb;
+  user-select: none;
+}
+
+th.drag-col-head {
+  z-index: 15;
+  background: #f9fafb;
+}
+
+.drag-grip {
+  display: inline-block;
+  font-size: 12px;
+  line-height: 1;
+  color: #94a3b8;
+  letter-spacing: -2px;
+  cursor: grab;
+}
+
+td.drag-handle-cell:active .drag-grip {
+  cursor: grabbing;
+}
+
+tbody td.drag-handle-cell {
+  background: #fff;
+}
+
+tbody tr.row-hidden td.drag-handle-cell {
+  background: #f8fafc;
+}
+
+tr.task-row-dragging {
+  opacity: 0.55;
+}
+
+tr.task-row-drop-hover {
+  outline: 2px dashed #6366f1;
+  outline-offset: -2px;
+}
+
+.pbi-header-row.pbi-drop-hover .pbi-header-label-cell {
+  background: #eef2ff !important;
+  box-shadow: inset 0 0 0 2px #818cf8;
+}
+
 th.col-sticky-key,
 td.col-sticky-key {
-  left: 0;
+  left: var(--sticky-drag);
   min-width: var(--sticky-key);
   width: var(--sticky-key);
   max-width: var(--sticky-key);
@@ -330,7 +387,7 @@ td.col-sticky-key {
 
 th.col-sticky-title,
 td.col-sticky-title {
-  left: var(--sticky-key);
+  left: calc(var(--sticky-drag) + var(--sticky-key));
   min-width: var(--sticky-title);
   width: var(--sticky-title);
   max-width: var(--sticky-title);
@@ -339,7 +396,7 @@ td.col-sticky-title {
 
 th.col-sticky-type,
 td.col-sticky-type {
-  left: calc(var(--sticky-key) + var(--sticky-title));
+  left: calc(var(--sticky-drag) + var(--sticky-key) + var(--sticky-title));
   min-width: var(--sticky-type);
   width: var(--sticky-type);
   max-width: var(--sticky-type);
@@ -348,7 +405,7 @@ td.col-sticky-type {
 
 th.col-sticky-status,
 td.col-sticky-status {
-  left: calc(var(--sticky-key) + var(--sticky-title) + var(--sticky-type));
+  left: calc(var(--sticky-drag) + var(--sticky-key) + var(--sticky-title) + var(--sticky-type));
   min-width: var(--sticky-status);
   width: var(--sticky-status);
   max-width: var(--sticky-status);
